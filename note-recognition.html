@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Note Recognition - Trillo</title>
+  <link rel="icon" type="image/jpeg" href="piano.jpg" />
+  <script defer src="audio-manager.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0b2f24;
+      --panel: rgba(255, 255, 255, 0.08);
+      --panel-strong: rgba(255, 255, 255, 0.12);
+      --text: #f8f9fb;
+      --muted: #cde3da;
+      --accent: #ff6b8a;
+      --success: #1abc9c;
+      --error: #ef5b5b;
+      --white-key: #f9f9f5;
+      --black-key: #111214;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Poppins", Arial, sans-serif;
+      background: linear-gradient(135deg, #0b2f24 0%, #0f3d2e 50%, #123d2f 100%);
+      color: var(--text);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 24px),
+        radial-gradient(circle at 25% 20%, rgba(255,255,255,0.05) 0 1px, transparent 2px),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.05) 0 1px, transparent 2px);
+      opacity: 0.08;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: min(900px, 100%);
+      padding: 30px;
+      background: rgba(9, 35, 26, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 28px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+
+    .quiz-header {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+
+    .brand-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: #fff;
+      text-decoration: none;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .brand-icon {
+      font-size: 1.3rem;
+    }
+
+    .brand-name {
+      color: #fff;
+    }
+
+    .quiz-header h1 {
+      margin: 0;
+      font-size: clamp(2rem, 3vw, 3.2rem);
+      color: #ff6b8a;
+      letter-spacing: 0.02em;
+    }
+
+    .quiz-header p {
+      margin: 12px auto 0;
+      max-width: 620px;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.7;
+    }
+
+    .accidental-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .controls-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .controls-row .accidental-control {
+      margin-top: 0;
+    }
+
+    .clef-control {
+      justify-self: end;
+    }
+
+    .toggle {
+      position: relative;
+      display: inline-flex;
+      width: 52px;
+      height: 30px;
+      cursor: pointer;
+    }
+
+    .toggle input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+
+    .toggle-track {
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: background 180ms ease;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 7px rgba(0, 0, 0, 0.25);
+      transition: transform 180ms ease;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: var(--accent);
+    }
+
+    .toggle input:checked + .toggle-track::after {
+      transform: translateX(22px);
+    }
+
+    .toggle input:focus-visible + .toggle-track {
+      outline: 3px solid rgba(255, 107, 138, 0.4);
+      outline-offset: 3px;
+    }
+
+    .staff-container {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 24px;
+      padding: 20px 22px;
+      margin: 0 auto 24px;
+      max-width: 680px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .staff {
+      width: 100%;
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #staff svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .feedback {
+      min-height: 28px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-size: 1.05rem;
+      color: var(--muted);
+      transition: color 200ms ease;
+    }
+
+    .note-indicator {
+      display: block;
+      width: max-content;
+      margin: 0 auto 16px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 1rem;
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+
+    .keyboard {
+      position: relative;
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 0 10px 16px;
+      display: grid;
+      place-items: center;
+    }
+
+    .white-keys {
+      display: grid;
+      grid-template-columns: repeat(15, 1fr);
+      gap: 6px;
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .key {
+      border: 1px solid rgba(0, 0, 0, 0.24);
+      border-radius: 0 0 12px 12px;
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+      position: relative;
+      outline: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .key:focus-visible {
+      box-shadow: 0 0 0 3px rgba(255, 107, 138, 0.35);
+    }
+
+    .white-key {
+      background: var(--white-key);
+      height: clamp(170px, 14vw, 220px);
+      border-radius: 0 0 16px 16px;
+      z-index: 1;
+      box-shadow: inset 0 -4px 12px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.14);
+    }
+
+    .white-key::after {
+      content: attr(data-note);
+      position: absolute;
+      right: 0;
+      bottom: 13px;
+      left: 0;
+      color: #1b3029;
+      font-size: clamp(0.55rem, 1.5vw, 0.82rem);
+      font-weight: 700;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .white-key::before,
+    .black-key::after {
+      content: attr(data-shortcut);
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 0.65rem;
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .white-key::before {
+      bottom: 39px;
+      padding: 4px 5px;
+      background: rgba(27, 48, 41, 0.12);
+      color: #1b3029;
+    }
+
+    .black-key::after {
+      top: 11px;
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    .white-key:hover {
+      transform: translateY(-2px);
+      box-shadow: inset 0 -4px 12px rgba(0, 0, 0, 0.08), 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    .black-key {
+      position: absolute;
+      top: 0;
+      width: calc(100% / 15 * 0.62);
+      height: clamp(90px, 9vw, 120px);
+      background: var(--black-key);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0 0 12px 12px;
+      z-index: 2;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .black-key:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .key.active {
+      transform: scale(0.98);
+    }
+
+    .key.correct {
+      background-color: #1abc9c !important;
+      border-color: #16a085 !important;
+      box-shadow: 0 0 0 6px rgba(26, 188, 156, 0.18);
+      color: #fff;
+    }
+
+    .key.correct::after,
+    .key.incorrect::after {
+      color: #fff;
+    }
+
+    .key.correct::before,
+    .key.incorrect::before {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .key.incorrect {
+      background-color: #ef5b5b !important;
+      border-color: #d34242 !important;
+      box-shadow: 0 0 0 6px rgba(239, 91, 91, 0.18);
+      color: #fff;
+    }
+
+    .black-key.correct {
+      background-color: #16a085 !important;
+    }
+
+    .black-key.incorrect {
+      background-color: #c0392b !important;
+    }
+
+    .black-key[data-note="C#4"] { left: 4.7%; }
+    .black-key[data-note="D#4"] { left: 11.3%; }
+    .black-key[data-note="F#4"] { left: 24.6%; }
+    .black-key[data-note="G#4"] { left: 31.2%; }
+    .black-key[data-note="A#4"] { left: 37.8%; }
+    .black-key[data-note="C#5"] { left: 50.9%; }
+    .black-key[data-note="D#5"] { left: 57.5%; }
+    .black-key[data-note="F#5"] { left: 71.0%; }
+    .black-key[data-note="G#5"] { left: 77.6%; }
+    .black-key[data-note="A#5"] { left: 84.2%; }
+
+    .keyboard:not(.bass-mode) [data-note$="2"],
+    .keyboard:not(.bass-mode) [data-note$="3"],
+    .keyboard.bass-mode [data-note$="5"],
+    .keyboard.bass-mode [data-note$="6"],
+    .keyboard.bass-mode .black-key[data-note="C#4"],
+    .keyboard.bass-mode [data-note="D4"],
+    .keyboard.bass-mode [data-note="E4"],
+    .keyboard.bass-mode [data-note="F4"],
+    .keyboard.bass-mode [data-note="G4"],
+    .keyboard.bass-mode [data-note="A4"],
+    .keyboard.bass-mode [data-note="B4"],
+    .keyboard.bass-mode .black-key[data-note="D#4"],
+    .keyboard.bass-mode .black-key[data-note="F#4"],
+    .keyboard.bass-mode .black-key[data-note="G#4"],
+    .keyboard.bass-mode .black-key[data-note="A#4"] {
+      display: none;
+    }
+
+    .keyboard.bass-mode .black-key[data-note="C#2"] { left: 4.7%; }
+    .keyboard.bass-mode .black-key[data-note="D#2"] { left: 11.3%; }
+    .keyboard.bass-mode .black-key[data-note="F#2"] { left: 24.6%; }
+    .keyboard.bass-mode .black-key[data-note="G#2"] { left: 31.2%; }
+    .keyboard.bass-mode .black-key[data-note="A#2"] { left: 37.8%; }
+    .keyboard.bass-mode .black-key[data-note="C#3"] { left: 50.9%; }
+    .keyboard.bass-mode .black-key[data-note="D#3"] { left: 57.5%; }
+    .keyboard.bass-mode .black-key[data-note="F#3"] { left: 71.0%; }
+    .keyboard.bass-mode .black-key[data-note="G#3"] { left: 77.6%; }
+    .keyboard.bass-mode .black-key[data-note="A#3"] { left: 84.2%; }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 20px;
+      }
+
+      .staff-container {
+        padding: 18px;
+      }
+
+      .white-keys {
+        gap: 4px;
+      }
+
+      .black-key {
+        width: calc(100% / 10.6);
+        height: 76px;
+      }
+
+      .controls-row {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 10px;
+      }
+
+      .clef-control {
+        justify-self: center;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .keyboard {
+        padding: 0 4px 16px;
+      }
+
+      .white-key {
+        height: 110px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="quiz-header">
+      <a href="index.html" class="brand-link" aria-label="Go to Trillo home">
+        <span class="brand-icon">🎵</span>
+        <span class="brand-name">Trillo</span>
+      </a>
+      <h1>Note Recognition</h1>
+      <p>Read the note on the staff and play it on the piano keyboard below.</p>
+      <div class="controls-row">
+        <div class="accidental-control">
+          <span>Multi-note mode</span>
+          <label class="toggle">
+            <input id="multiNoteToggle" type="checkbox" aria-label="Turn multi-note mode on or off" />
+            <span class="toggle-track"></span>
+          </label>
+          <span id="multiNoteStatus">Off</span>
+        </div>
+        <div class="accidental-control">
+        <span>Accidentals (♮ ♯ ♭)</span>
+        <label class="toggle">
+          <input id="accidentalToggle" type="checkbox" aria-label="Turn accidental mode on or off" />
+          <span class="toggle-track"></span>
+        </label>
+        <span id="accidentalStatus">Off</span>
+        </div>
+        <div class="accidental-control clef-control">
+          <span>Bass clef</span>
+          <label class="toggle">
+            <input id="clefToggle" type="checkbox" aria-label="Switch between treble and bass clef" />
+            <span class="toggle-track"></span>
+          </label>
+          <span id="clefStatus">Treble</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="staff-container">
+      <div id="staff" class="staff" aria-label="Musical staff with note"></div>
+    </div>
+
+    <p id="feedback" class="feedback">Tap the correct key to begin.</p>
+
+    <div class="keyboard" id="keyboard" aria-label="Piano keyboard">
+      <div class="white-keys">
+        <button type="button" class="key white-key" data-note="C2" aria-label="Piano key C2"></button>
+        <button type="button" class="key white-key" data-note="D2" aria-label="Piano key D2"></button>
+        <button type="button" class="key white-key" data-note="E2" aria-label="Piano key E2"></button>
+        <button type="button" class="key white-key" data-note="F2" aria-label="Piano key F2"></button>
+        <button type="button" class="key white-key" data-note="G2" aria-label="Piano key G2"></button>
+        <button type="button" class="key white-key" data-note="A2" aria-label="Piano key A2"></button>
+        <button type="button" class="key white-key" data-note="B2" aria-label="Piano key B2"></button>
+        <button type="button" class="key white-key" data-note="C3" aria-label="Piano key C3"></button>
+        <button type="button" class="key white-key" data-note="D3" aria-label="Piano key D3"></button>
+        <button type="button" class="key white-key" data-note="E3" aria-label="Piano key E3"></button>
+        <button type="button" class="key white-key" data-note="F3" aria-label="Piano key F3"></button>
+        <button type="button" class="key white-key" data-note="G3" aria-label="Piano key G3"></button>
+        <button type="button" class="key white-key" data-note="A3" aria-label="Piano key A3"></button>
+        <button type="button" class="key white-key" data-note="B3" aria-label="Piano key B3"></button>
+        <button type="button" class="key white-key" data-note="C4" aria-label="Piano key C4"></button>
+        <button type="button" class="key white-key" data-note="D4" aria-label="Piano key D4"></button>
+        <button type="button" class="key white-key" data-note="E4" aria-label="Piano key E4"></button>
+        <button type="button" class="key white-key" data-note="F4" aria-label="Piano key F4"></button>
+        <button type="button" class="key white-key" data-note="G4" aria-label="Piano key G4"></button>
+        <button type="button" class="key white-key" data-note="A4" aria-label="Piano key A4"></button>
+        <button type="button" class="key white-key" data-note="B4" aria-label="Piano key B4"></button>
+        <button type="button" class="key white-key" data-note="C5" aria-label="Piano key C5"></button>
+        <button type="button" class="key white-key" data-note="D5" aria-label="Piano key D5"></button>
+        <button type="button" class="key white-key" data-note="E5" aria-label="Piano key E5"></button>
+        <button type="button" class="key white-key" data-note="F5" aria-label="Piano key F5"></button>
+        <button type="button" class="key white-key" data-note="G5" aria-label="Piano key G5"></button>
+        <button type="button" class="key white-key" data-note="A5" aria-label="Piano key A5"></button>
+        <button type="button" class="key white-key" data-note="B5" aria-label="Piano key B5"></button>
+        <button type="button" class="key white-key" data-note="C6" aria-label="Piano key C6"></button>
+      </div>
+
+      <button type="button" class="key black-key" data-note="C#2" aria-label="Piano key C sharp 2"></button>
+      <button type="button" class="key black-key" data-note="D#2" aria-label="Piano key D sharp 2"></button>
+      <button type="button" class="key black-key" data-note="F#2" aria-label="Piano key F sharp 2"></button>
+      <button type="button" class="key black-key" data-note="G#2" aria-label="Piano key G sharp 2"></button>
+      <button type="button" class="key black-key" data-note="A#2" aria-label="Piano key A sharp 2"></button>
+      <button type="button" class="key black-key" data-note="C#3" aria-label="Piano key C sharp 3"></button>
+      <button type="button" class="key black-key" data-note="D#3" aria-label="Piano key D sharp 3"></button>
+      <button type="button" class="key black-key" data-note="F#3" aria-label="Piano key F sharp 3"></button>
+      <button type="button" class="key black-key" data-note="G#3" aria-label="Piano key G sharp 3"></button>
+      <button type="button" class="key black-key" data-note="A#3" aria-label="Piano key A sharp 3"></button>
+      <button type="button" class="key black-key" data-note="C#4" aria-label="Piano key C sharp 4"></button>
+      <button type="button" class="key black-key" data-note="D#4" aria-label="Piano key D sharp 4"></button>
+      <button type="button" class="key black-key" data-note="F#4" aria-label="Piano key F sharp 4"></button>
+      <button type="button" class="key black-key" data-note="G#4" aria-label="Piano key G sharp 4"></button>
+      <button type="button" class="key black-key" data-note="A#4" aria-label="Piano key A sharp 4"></button>
+      <button type="button" class="key black-key" data-note="C#5" aria-label="Piano key C sharp 5"></button>
+      <button type="button" class="key black-key" data-note="D#5" aria-label="Piano key D sharp 5"></button>
+      <button type="button" class="key black-key" data-note="F#5" aria-label="Piano key F sharp 5"></button>
+      <button type="button" class="key black-key" data-note="G#5" aria-label="Piano key G sharp 5"></button>
+      <button type="button" class="key black-key" data-note="A#5" aria-label="Piano key A sharp 5"></button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vexflow/releases/vexflow-min.js"></script>
+  <script>
+    const noteMappings = {
+      C2: 'c/2',
+      'C#2': 'c#/2',
+      D2: 'd/2',
+      'D#2': 'd#/2',
+      E2: 'e/2',
+      F2: 'f/2',
+      'F#2': 'f#/2',
+      G2: 'g/2',
+      'G#2': 'g#/2',
+      A2: 'a/2',
+      'A#2': 'a#/2',
+      B2: 'b/2',
+      C3: 'c/3',
+      'C#3': 'c#/3',
+      D3: 'd/3',
+      'D#3': 'd#/3',
+      E3: 'e/3',
+      F3: 'f/3',
+      'F#3': 'f#/3',
+      G3: 'g/3',
+      'G#3': 'g#/3',
+      A3: 'a/3',
+      'A#3': 'a#/3',
+      B3: 'b/3',
+      C4: 'c/4',
+      'C#4': 'c#/4',
+      D4: 'd/4',
+      'D#4': 'd#/4',
+      E4: 'e/4',
+      F4: 'f/4',
+      'F#4': 'f#/4',
+      G4: 'g/4',
+      'G#4': 'g#/4',
+      A4: 'a/4',
+      'A#4': 'a#/4',
+      B4: 'b/4',
+      C5: 'c/5',
+      'C#5': 'c#/5',
+      D5: 'd/5',
+      'D#5': 'd#/5',
+      E5: 'e/5',
+      F5: 'f/5',
+      'F#5': 'f#/5',
+      G5: 'g/5',
+      'G#5': 'g#/5',
+      A5: 'a/5',
+      'A#5': 'a#/5',
+      B5: 'b/5',
+      C6: 'c/6'
+    };
+
+    const trebleNaturalTargets = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6'];
+    const trebleAccidentalTargets = [
+      ...trebleNaturalTargets,
+      'C#4', 'D#4', 'F#4', 'G#4', 'A#4',
+      'C#5', 'D#5', 'F#5', 'G#5', 'A#5',
+      'Db4', 'Eb4', 'Gb4', 'Ab4', 'Bb4',
+      'Db5', 'Eb5', 'Gb5', 'Ab5', 'Bb5'
+    ];
+    // Bass-clef positions, from bottom to top: A2, B2, C3 ... B3.
+    const bassNaturalTargets = ['A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3'];
+    const bassAccidentalTargets = [
+      ...bassNaturalTargets,
+      'A#2',
+      'C#3', 'D#3', 'F#3', 'G#3', 'A#3',
+      'Bb2',
+      'Db3', 'Eb3', 'Gb3', 'Ab3', 'Bb3'
+    ];
+    const bassStaffKeys = {
+      A2: 'f/4', B2: 'g/4', C3: 'a/4', D3: 'b/4', E3: 'c/5',
+      F3: 'd/5', G3: 'e/5', A3: 'f/5', B3: 'g/5'
+    };
+    const flatEquivalent = {
+      Db2: 'C#2', Eb2: 'D#2', Gb2: 'F#2', Ab2: 'G#2', Bb2: 'A#2',
+      Db3: 'C#3', Eb3: 'D#3', Gb3: 'F#3', Ab3: 'G#3', Bb3: 'A#3',
+      Db4: 'C#4', Eb4: 'D#4', Gb4: 'F#4', Ab4: 'G#4', Bb4: 'A#4',
+      Db5: 'C#5', Eb5: 'D#5', Gb5: 'F#5', Ab5: 'G#5', Bb5: 'A#5'
+    };
+    let currentTarget = null;
+    let currentTargets = [];
+    let answeredTargets = new Set();
+    let accidentalsEnabled = false;
+    let currentClef = 'treble';
+    let multiNoteEnabled = false;
+    const whiteShortcuts = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z', 'x', 'c', 'v', 'b', 'n'];
+    const blackShortcuts = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
+    const shortcutToKey = new Map();
+    const pressedShortcuts = new Set();
+    let renderer;
+    let context;
+    let audioCtx;
+    let noiseBuffer;
+
+    function createStaffNote(noteName) {
+      const isFlat = noteName.includes('b');
+      const isSharp = noteName.includes('#');
+      const pianoNote = flatEquivalent[noteName] || noteName;
+      const staffBaseNote = isFlat
+        ? `${noteName[0]}${noteName.slice(-1)}`
+        : pianoNote.replace('#', '');
+      const vexKey = isFlat
+        ? `${noteName[0].toLowerCase()}b/${noteName.slice(-1)}`
+        : noteMappings[pianoNote];
+      const renderedKey = currentClef === 'bass'
+        ? bassStaffKeys[staffBaseNote]
+        : vexKey;
+      const note = new Vex.Flow.StaveNote({ keys: [renderedKey], duration: 'q' });
+
+      if (accidentalsEnabled) {
+        const symbol = isFlat ? 'b' : isSharp ? '#' : 'n';
+        note.addAccidental(0, new Vex.Flow.Accidental(symbol));
+      }
+
+      const answered = answeredTargets.has(noteName);
+      note.setStyle({
+        fillStyle: answered ? '#1abc9c' : '#fff',
+        strokeStyle: answered ? '#1abc9c' : '#fff'
+      });
+      return note;
+    }
+
+    function renderNotesOnStaff(noteNames) {
+      const staffDiv = document.getElementById('staff');
+      staffDiv.innerHTML = '';
+      renderer = new Vex.Flow.Renderer(staffDiv, Vex.Flow.Renderer.Backends.SVG);
+      renderer.resize(580, 200);
+      context = renderer.getContext();
+      context.setFont('Arial', 14, '').setFillStyle('#fff');
+      context.scale(0.96, 0.96);
+
+      const stave = new Vex.Flow.Stave(20, 26, 540);
+      stave.addClef(currentClef);
+      stave.setContext(context).draw();
+
+      const notes = noteNames.map(createStaffNote);
+      const voice = new Vex.Flow.Voice({ num_beats: notes.length, beat_value: 4 });
+      voice.addTickables(notes);
+
+      new Vex.Flow.Formatter().joinVoices([voice]).format([voice], noteNames.length > 1 ? 430 : 220);
+      voice.draw(context, stave);
+    }
+
+    function createNoiseBuffer(ctx) {
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      }
+      return buffer;
+    }
+
+    function getAudioContext() {
+      if (audioCtx) return audioCtx;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      audioCtx = new AudioContext();
+      noiseBuffer = createNoiseBuffer(audioCtx);
+      return audioCtx;
+    }
+
+    function playTone(noteName, velocity = 0.72) {
+      if (window.TrilloAudioManager && typeof window.TrilloAudioManager.playNote === 'function') {
+        window.TrilloAudioManager.playNote(noteName, velocity);
+      }
+    }
+
+    function noteToFrequency(note) {
+      const semitones = {
+        C2: 36, 'C#2': 37, D2: 38, 'D#2': 39,
+        E2: 40, F2: 41, 'F#2': 42, G2: 43,
+        'G#2': 44, A2: 45, 'A#2': 46, B2: 47,
+        C3: 48, 'C#3': 49, D3: 50, 'D#3': 51,
+        E3: 52, F3: 53, 'F#3': 54, G3: 55,
+        'G#3': 56, A3: 57, 'A#3': 58, B3: 59,
+        C4: 60, 'C#4': 61, D4: 62, 'D#4': 63,
+        E4: 64, F4: 65, 'F#4': 66, G4: 67,
+        'G#4': 68, A4: 69, 'A#4': 70, B4: 71,
+        C5: 72, 'C#5': 73, D5: 74, 'D#5': 75,
+        E5: 76, F5: 77, 'F#5': 78, G5: 79,
+        'G#5': 80, A5: 81, 'A#5': 82, B5: 83, C6: 84
+      };
+      const midi = semitones[note];
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function showNote(noteName) {
+      currentTarget = noteName;
+      currentTargets = [noteName];
+      answeredTargets = new Set();
+      renderNotesOnStaff(currentTargets);
+      const feedback = document.getElementById('feedback');
+      feedback.textContent = 'Tap the correct key on the keyboard below.';
+      feedback.style.color = 'var(--muted)';
+    }
+
+    function showMultiNote(targets) {
+      currentTarget = null;
+      currentTargets = [...targets];
+      answeredTargets = new Set();
+      renderNotesOnStaff(currentTargets);
+      const feedback = document.getElementById('feedback');
+      feedback.textContent = 'Play each note on the staff. Correct notes turn green.';
+      feedback.style.color = 'var(--muted)';
+    }
+
+    function showRandomNote() {
+      const targets = currentClef === 'bass'
+        ? (accidentalsEnabled ? bassAccidentalTargets : bassNaturalTargets)
+        : (accidentalsEnabled ? trebleAccidentalTargets : trebleNaturalTargets);
+      if (multiNoteEnabled) {
+        const shuffledTargets = [...targets].sort(() => Math.random() - 0.5);
+        showMultiNote(shuffledTargets.slice(0, Math.min(4, targets.length)));
+        return;
+      }
+      const randomIndex = Math.floor(Math.random() * targets.length);
+      showNote(targets[randomIndex]);
+    }
+
+    function updateFeedback(message, isCorrect) {
+      const feedback = document.getElementById('feedback');
+      feedback.textContent = message;
+      feedback.style.color = isCorrect ? '#1abc9c' : '#ef5b5b';
+    }
+
+    function formatNoteName(noteName) {
+      const sharpName = flatEquivalent[noteName] || noteName;
+      const flatName = Object.keys(flatEquivalent).find((flat) => flatEquivalent[flat] === sharpName);
+      return flatName ? `${flatName} / ${sharpName}` : noteName;
+    }
+
+    function clearKeyStates() {
+      document.querySelectorAll('.key').forEach((key) => {
+        key.classList.remove('active', 'correct', 'incorrect');
+      });
+    }
+
+    function flashKey(key, result) {
+      key.classList.add('active');
+      key.classList.add(result ? 'correct' : 'incorrect');
+      setTimeout(() => {
+        key.classList.remove('active');
+        if (result) key.classList.remove('correct');
+        else key.classList.remove('incorrect');
+      }, 320);
+    }
+
+    function checkAnswer(chosenNote, button) {
+      clearKeyStates();
+      if (multiNoteEnabled) {
+        const matchedTarget = currentTargets.find((target) => !answeredTargets.has(target));
+        const correct = chosenNote === (flatEquivalent[matchedTarget] || matchedTarget);
+
+        if (correct) {
+          answeredTargets.add(matchedTarget);
+          renderNotesOnStaff(currentTargets);
+          flashKey(button, true);
+          if (answeredTargets.size === currentTargets.length) {
+            updateFeedback('✅ Great work! All notes are correct.', true);
+            setTimeout(showRandomNote, 800);
+          } else {
+            updateFeedback('✅ Correct! Keep going.', true);
+          }
+        } else {
+          updateFeedback('❌ Not yet. Play the leftmost note that is still white.', false);
+          flashKey(button, false);
+        }
+        return;
+      }
+      const correct = chosenNote === (flatEquivalent[currentTarget] || currentTarget);
+      if (correct) {
+        updateFeedback(`✅ Correct! That was ${formatNoteName(currentTarget)}.`, true);
+        flashKey(button, true);
+        setTimeout(showRandomNote, 600);
+      } else {
+        updateFeedback(`❌ You played ${chosenNote}. The correct answer was ${formatNoteName(currentTarget)}.`, false);
+        flashKey(button, false);
+      }
+    }
+
+    function attachKeyListeners() {
+      document.querySelectorAll('.key').forEach((key) => {
+        key.addEventListener('click', () => {
+          const chosenNote = key.dataset.note;
+          const velocity = Math.min(1, 0.52 + Math.random() * 0.38);
+          playTone(chosenNote, velocity);
+          checkAnswer(chosenNote, key);
+        });
+      });
+    }
+
+    function attachModeToggle() {
+      const toggle = document.getElementById('accidentalToggle');
+      const status = document.getElementById('accidentalStatus');
+      toggle.addEventListener('change', () => {
+        accidentalsEnabled = toggle.checked;
+        status.textContent = accidentalsEnabled ? 'On' : 'Off';
+        showRandomNote();
+      });
+    }
+
+    function attachMultiNoteToggle() {
+      const toggle = document.getElementById('multiNoteToggle');
+      const status = document.getElementById('multiNoteStatus');
+      toggle.addEventListener('change', () => {
+        multiNoteEnabled = toggle.checked;
+        status.textContent = multiNoteEnabled ? 'On' : 'Off';
+        showRandomNote();
+      });
+    }
+
+    function assignKeyboardShortcuts() {
+      shortcutToKey.clear();
+      document.querySelectorAll('.key').forEach((key) => {
+        delete key.dataset.shortcut;
+      });
+
+      const visibleWhiteKeys = [...document.querySelectorAll('.white-key')]
+        .filter((key) => getComputedStyle(key).display !== 'none');
+      const visibleBlackKeys = [...document.querySelectorAll('.black-key')]
+        .filter((key) => getComputedStyle(key).display !== 'none');
+
+      visibleWhiteKeys.forEach((key, index) => {
+        const shortcut = whiteShortcuts[index];
+        if (!shortcut) return;
+        key.dataset.shortcut = shortcut;
+        shortcutToKey.set(shortcut, key);
+      });
+
+      visibleBlackKeys.forEach((key, index) => {
+        const shortcut = blackShortcuts[index];
+        if (!shortcut) return;
+        key.dataset.shortcut = shortcut;
+        shortcutToKey.set(shortcut, key);
+      });
+    }
+
+    function attachComputerKeyboard() {
+      document.addEventListener('keydown', (event) => {
+        const shortcut = event.key.toLowerCase();
+        const pianoKey = shortcutToKey.get(shortcut);
+        if (!pianoKey || event.repeat || pressedShortcuts.has(shortcut)) return;
+
+        pressedShortcuts.add(shortcut);
+        event.preventDefault();
+        pianoKey.click();
+      });
+
+      document.addEventListener('keyup', (event) => {
+        pressedShortcuts.delete(event.key.toLowerCase());
+      });
+
+      window.addEventListener('blur', () => pressedShortcuts.clear());
+    }
+
+    function attachClefToggle() {
+      const toggle = document.getElementById('clefToggle');
+      const status = document.getElementById('clefStatus');
+      const keyboard = document.getElementById('keyboard');
+      toggle.addEventListener('change', () => {
+        currentClef = toggle.checked ? 'bass' : 'treble';
+        status.textContent = toggle.checked ? 'Bass' : 'Treble';
+        keyboard.classList.toggle('bass-mode', toggle.checked);
+        assignKeyboardShortcuts();
+        showRandomNote();
+      });
+    }
+
+    function init() {
+      attachKeyListeners();
+      assignKeyboardShortcuts();
+      attachComputerKeyboard();
+      attachModeToggle();
+      attachMultiNoteToggle();
+      attachClefToggle();
+      showRandomNote();
+    }
+
+    init();
+  </script>
+</body>
+</html>

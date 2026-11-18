@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trillo - Piano Practice</title>
+    <link rel="icon" type="image/jpeg" href="piano.jpg">
+    <link rel="stylesheet" href="style.css">
+    <script defer src="piano.js"></script>
+</head>
+<body>
+    <header class="navbar">
+        <a href="index.html" class="logo">
+            <span>🎵</span>
+            <h2>Trillo</h2>
+        </a>
+    </header>
+
+    <main class="piano-page">
+        <section class="streak-card" aria-live="polite">
+            <div class="streak-icon">🔥</div>
+            <div class="streak-copy">
+                <p class="streak-label">Practice streak</p>
+                <p class="streak-value"><span id="streakCount">0</span> day<span id="streakPlural">s</span></p>
+                <p class="streak-best">Best streak: <span id="bestStreak">0</span></p>
+            </div>
+        </section>
+
+        <h1>Piano Practice</h1>
+        <p class="subtitle">Choose your practice mode.</p>
+
+        <div class="mode-grid">
+            <div class="mode-card">
+                <h2>🎯 Note Recognition</h2>
+                <p>Read a note and click the correct piano key.</p>
+                <a class="mode-button" href="note-recognition.html">Start</a>
+            </div>
+
+            <div class="mode-card">
+                <h2>⚡ Speed Challenge</h2>
+                <p>See how many notes you can answer in 60 seconds.</p>
+                <button>Coming Soon</button>
+            </div>
+
+            <div class="mode-card">
+                <h2>🎼 Staff Reading</h2>
+                <p>Practice reading real sheet music.</p>
+                <button>Coming Soon</button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
